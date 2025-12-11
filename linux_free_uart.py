@@ -24,7 +24,7 @@ from PyQt5.QtWidgets import (
     QApplication, QWidget, QLabel, QPushButton, QTextEdit, QLineEdit,
     QVBoxLayout, QHBoxLayout, QComboBox, QScrollArea, QMessageBox,
     QInputDialog, QFileDialog, QSizePolicy, QColorDialog, QDialog,
-    QFormLayout, QDialogButtonBox, QFrame
+    QFormLayout, QDialogButtonBox, QFrame, QRadioButton
 )
 
 # ---------- 基础信息 ----------
@@ -58,6 +58,7 @@ TRANSLATIONS = {
     "btn_run_script": {"en": "Run Script", "zh": "运行脚本"},
     "btn_stop_script": {"en": "Stop Script", "zh": "停止脚本"},
     "btn_about": {"en": "About", "zh": "关于"},
+    "btn_settings": {"en": "Settings", "zh": "设置"},
     "btn_new_group": {"en": "+ New Group", "zh": "+ 新建分组"},
     "placeholder_empty_group": {"en": "Drag commands here", "zh": "拖拽命令到此处"},
     "placeholder_no_device": {"en": "<No Device>", "zh": "<无设备>"},
@@ -132,6 +133,10 @@ TRANSLATIONS = {
     "dlg_open_script_title": {"en": "Select Script File", "zh": "选择脚本文件"},
     "dlg_choose_group_title": {"en": "Choose Group", "zh": "选择分组"},
     "dlg_choose_group_prompt": {"en": "Add command to which group?", "zh": "请选择要添加到的分组:"},
+    "dlg_settings_title": {"en": "Settings", "zh": "设置"},
+    "label_theme": {"en": "Theme", "zh": "主题"},
+    "theme_light": {"en": "Light", "zh": "亮色"},
+    "theme_dark": {"en": "Dark", "zh": "暗色"},
     "msg_open_fail_title": {"en": "Open Failed", "zh": "打开失败"},
     "msg_export_no_path": {"en": "No path selected.", "zh": "未选择路径。"},
     "msg_script_need_open_title": {"en": "Info", "zh": "提示"},
@@ -590,6 +595,49 @@ class GroupEditDialog(QDialog):
         return self.name_input.text().strip(), self.selected_color
 
 
+class SettingsDialog(QDialog):
+    """全局设置（主题选择）"""
+    def __init__(self, current_theme, tr_fn, parent=None):
+        super().__init__(parent)
+        self.tr = tr_fn
+        self.setWindowTitle(self.tr("dlg_settings_title"))
+        self._theme = current_theme
+
+        layout = QVBoxLayout(self)
+        layout.addWidget(QLabel(self.tr("label_theme")))
+
+        self.radio_light = QRadioButton(self.tr("theme_light"))
+        self.radio_dark = QRadioButton(self.tr("theme_dark"))
+
+        self.radio_light.toggled.connect(lambda checked: self._set_theme("light") if checked else None)
+        self.radio_dark.toggled.connect(lambda checked: self._set_theme("dark") if checked else None)
+
+        theme_line = QVBoxLayout()
+        theme_line.addWidget(self.radio_light)
+        theme_line.addWidget(self.radio_dark)
+        layout.addLayout(theme_line)
+
+        btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, parent=self)
+        btns.accepted.connect(self.accept)
+        btns.rejected.connect(self.reject)
+        layout.addWidget(btns)
+
+        self._set_theme(current_theme, init=True)
+
+    def _set_theme(self, theme, init=False):
+        self._theme = theme
+        self.radio_light.setChecked(theme == "light")
+        self.radio_dark.setChecked(theme == "dark")
+        if not init:
+            # ensure exclusive behavior
+            if theme == "light":
+                self.radio_dark.setChecked(False)
+            else:
+                self.radio_light.setChecked(False)
+
+    def get_theme(self):
+        return self._theme
+
 
 # ---------- 命令容器：支持分组显示 ----------
 class CmdContainer(QWidget):
@@ -1002,6 +1050,7 @@ class SerialTool(QWidget):
     def __init__(self):
         super().__init__()
         self.lang = "en"  # 默认英文
+        self.theme = "light"
         self.setWindowTitle(self._tr("title_main"))
         self.resize(900, 580)
 
@@ -1057,6 +1106,7 @@ class SerialTool(QWidget):
         self.btn_stop_script = QPushButton(); self.btn_stop_script.clicked.connect(self._stop_script)
         self.btn_stop_script.setEnabled(False)
         self.about_btn = QPushButton(); self.about_btn.clicked.connect(self._show_about)
+        self.settings_btn = QPushButton(); self.settings_btn.clicked.connect(self._open_settings)
         self.lang_label = QLabel()
         self.lang_cb = QComboBox()
         for code, name in LANGUAGES.items():
@@ -1068,6 +1118,7 @@ class SerialTool(QWidget):
         tools.addWidget(self.btn_run_script)
         tools.addWidget(self.btn_stop_script)
         tools.addWidget(self.about_btn)
+        tools.addWidget(self.settings_btn)
         tools.addWidget(self.lang_label)
         tools.addWidget(self.lang_cb)
         tools.addStretch(1)
@@ -1085,6 +1136,7 @@ class SerialTool(QWidget):
 
         self._rebuild_cmd_buttons()
         self._apply_language()
+        self._apply_theme()
 
     def _apply_language(self):
         """应用当前语言到界面"""
@@ -1100,6 +1152,7 @@ class SerialTool(QWidget):
         self.btn_run_script.setText(self._tr("btn_run_script"))
         self.btn_stop_script.setText(self._tr("btn_stop_script"))
         self.about_btn.setText(self._tr("btn_about"))
+        self.settings_btn.setText(self._tr("btn_settings"))
         self.right_title_label.setText(self._tr("label_command_buttons"))
         self.lang_label.setText(self._tr("label_lang"))
         self._rebuild_cmd_buttons()
@@ -1112,6 +1165,32 @@ class SerialTool(QWidget):
         if code and code != self.lang:
             self.lang = code
             self._apply_language()
+
+    def _apply_theme(self):
+        """应用主题（亮/暗）"""
+        app = QApplication.instance()
+        if not app:
+            return
+        if self.theme == "dark":
+            css = """
+            QWidget { background-color: #121212; color: #F0F0F0; }
+            QPushButton { background-color: #1F1F1F; color: #F0F0F0; border: 1px solid #2A2A2A; padding: 6px 10px; border-radius: 4px; }
+            QPushButton:hover { background-color: #2A2A2A; }
+            QLineEdit, QComboBox, QTextEdit { background-color: #1B1B1B; color: #F0F0F0; border: 1px solid #2A2A2A; }
+            QScrollArea { background-color: #121212; }
+            QDialog { background-color: #121212; }
+            """
+        else:
+            css = ""
+        app.setStyleSheet(css)
+
+    def _open_settings(self):
+        dlg = SettingsDialog(self.theme, self._tr, self)
+        if dlg.exec_() == QDialog.Accepted:
+            new_theme = dlg.get_theme()
+            if new_theme != self.theme:
+                self.theme = new_theme
+                self._apply_theme()
 
     # ===== 关于 =====
     def _show_about(self):
