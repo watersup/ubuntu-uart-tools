@@ -1,0 +1,26 @@
+{
+  "version": 2,
+  "groups": [
+    {
+      "id": "default",
+      "name": "default",
+      "color": "#F5F5F5",
+      "collapsed": false,
+      "commands": [
+        "AT",
+        "AT+GMR",
+        "AT+RST",
+        "AT+HELP"
+      ]
+    },
+    {
+      "id": "3d102fb5",
+      "name": "GROUP1",
+      "color": "#FFF9C4",
+      "collapsed": false,
+      "commands": [
+        "AT+FAKE1"
+      ]
+    }
+  ]
+}
